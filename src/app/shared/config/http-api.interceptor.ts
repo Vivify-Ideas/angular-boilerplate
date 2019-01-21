@@ -1,10 +1,13 @@
 
-import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent } from '@angular/common/http';
+import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent, HttpErrorResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 import { environment } from './../../../environments/environment';
-import { AuthQuery } from './../store';
+import { AuthQuery, AuthService } from './../store';
+import { Router } from '@angular/router';
+import { SiteRoutes } from '../constants';
+import { catchError } from 'rxjs/operators';
 
 @Injectable()
 export class HttpApiInterceptor implements HttpInterceptor {
@@ -13,7 +16,9 @@ export class HttpApiInterceptor implements HttpInterceptor {
    * @param authService {AuthService}
    */
   constructor(
-    private authQuery: AuthQuery
+    private authQuery: AuthQuery,
+    private router: Router,
+    private authService: AuthService
   ) { }
 
   /**
@@ -42,9 +47,23 @@ export class HttpApiInterceptor implements HttpInterceptor {
           ...authHeaders
         },
       });
-      observable = next.handle(req);
+      observable = next.handle(req).pipe(catchError((error) => {
+        if (error instanceof HttpErrorResponse && error.status === 403) {
+          this.handleAuthError(error);
+        }
+        return of(error);
+      }));
     });
 
     return observable
+  }
+
+  /**
+   * Handle auth problem with request, usually 403
+   * @param {HttpErrorResponse} error
+   */
+  handleAuthError(error: HttpErrorResponse) {
+    this.router.navigate([SiteRoutes.LOGIN]);
+    this.authService.logout();
   }
 }
